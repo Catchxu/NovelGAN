@@ -1,0 +1,1 @@
+from .detect import generally_detect
