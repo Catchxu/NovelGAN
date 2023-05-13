@@ -8,7 +8,6 @@ from typing import Dict
 
 from .generator import Generator
 from .discriminator import Discriminator
-from .myloss import EntropyLoss
 
 
 def Detect_cell(train: np.array,
@@ -22,6 +21,44 @@ def Detect_cell(train: np.array,
                 log_interval: int = 10,
                 random_state: int = 100,
                 weight: Dict = None):
+    '''
+    This function is for novel cell type detection via NovelGan.
+
+    Parameters
+    ----------
+    train: array
+        The train expression matrix of shape n_obs x n_var.
+        Rows correspond to cells and columns to genes.
+        The cells in train will be regarded as known cell type.
+    test: array
+        The test expression matrix of shape n_obs x n_var.
+        Rows correspond to cells and columns to genes.
+        It includes some novel cells which are different from train
+    n_epochs: int
+        The numbers of epochs to train NovelGan.
+    batch_size: int
+        The batch size of train datasets.
+    learning_rate: float
+        The learning rate of the generator and discriminator's optimizer.
+    mem_dim: int
+        The size of memory bank.
+    GPU: bool
+        If 'True', the NovelGan will be trained on GPU (if possible).
+    verbose: bool
+        If 'True", prints the details in train.
+    log_interval: int
+        The interval epochs between two prints of training information.
+    random_state: int
+        Change to use different initial states for the optimization.
+    weight: dictionary
+        The weight of every parts loss of generator's loss.
+        e.g. {'w_enc': 1, 'w_rec': 30, 'w_adv': 1}
+    
+    Returns
+    -------
+    
+    '''
+
     if GPU:
         if torch.cuda.is_available():
             device = torch.device("cuda:0")
@@ -47,7 +84,8 @@ def Detect_cell(train: np.array,
                               batch_size=batch_size,
                               shuffle=True,
                               num_workers=4,
-                              pin_memory=True)
+                              pin_memory=True,
+                              drop_last=True)
     test_loader = DataLoader(test,
                              batch_size=batch_size * 5,
                              shuffle=False,
@@ -63,18 +101,18 @@ def Detect_cell(train: np.array,
                        lr=learning_rate,
                        betas=(0.5, 0.999))
     opt_G = optim.Adam(G.parameters(),
-                       lr=learning_rate*2,
+                       lr=learning_rate,
                        betas=(0.5, 0.999))
 
     D_scaler = torch.cuda.amp.GradScaler()
     G_scaler = torch.cuda.amp.GradScaler()
+    L1 = nn.L1Loss().to(device)
     L2 = nn.MSELoss().to(device)
-    Entropy = EntropyLoss().to(device)
     BCE = nn.BCELoss().to(device)
 
     # Initialize the weight of generator's loss
     if weight is None:
-        weight = {'w_enc': 1, 'w_rec': 30, 'w_adv': 1, 'w_att': 0.1}
+        weight = {'w_enc': 1, 'w_rec': 32, 'w_adv': 1}
 
     D.train()
     G.train()
@@ -84,21 +122,19 @@ def Detect_cell(train: np.array,
             data = data.to(device)
 
             # forward
-            real_z, fake_data, fake_z, att = G(data)
+            real_z, fake_data, fake_z = G(data)
             real_d = D(data)
             fake_d = D(fake_data.detach())
 
             # update G-Net
             Loss_enc = L2(real_z, fake_z)
-            Loss_rec = L2(data, fake_data)
+            Loss_rec = L1(data, fake_data)
             real_loss = L2(real_d, torch.ones_like(real_d))
             fake_loss = L2(fake_d, torch.zeros_like(fake_d))
             Loss_adv = real_loss + fake_loss
-            Loss_att = Entropy(att)
             G_loss = (weight['w_enc']*Loss_enc +
                       weight['w_rec']*Loss_rec +
-                      weight['w_adv']*Loss_adv +
-                      weight['w_att']*Loss_att)
+                      weight['w_adv']*Loss_adv)
 
             opt_G.zero_grad()
             G_scaler.scale(G_loss).backward(retain_graph=True)
@@ -115,6 +151,9 @@ def Detect_cell(train: np.array,
             D_scaler.step(opt_D)
             D_scaler.update()
 
+            # update the memory bank finally
+            G.Memory.update_mem(real_z)
+
         if verbose and ((epoch+1) % log_interval == 0):
             print('Train Epoch: [{}/{} ({:.0f}%)]\tG_loss: {:.6f}\tD_loss: {:.6f}'.format(
                    epoch+1, n_epochs, 100.*(epoch+1)/n_epochs, G_loss.item(), D_loss.item()))
@@ -125,12 +164,11 @@ def Detect_cell(train: np.array,
         diff = torch.empty((0, real_z.shape[2])).to(device)
         for idx, data in enumerate(test_loader):
             data = data.to(device)
-            real_z, fake_test, fake_z, att = G(data)
+            real_z, fake_test, fake_z = G(data)
             d = nn.MSELoss(reduce=False)(real_z, fake_z)
             d = d.reshape(d.shape[0], d.shape[2])
             diff = torch.cat([diff, d], dim=0)
 
-    diff = diff.mean(axis=1)
     diff = diff.cpu().numpy()
 
     return diff

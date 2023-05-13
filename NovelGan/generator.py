@@ -65,24 +65,25 @@ class Decoder(nn.Module):
 class Generator(nn.Module):
     '''
     Forward process:
-    x -> Encoder -> MemoryUnit -> Decoder -> Encoder
-                |             |          |          |
-              real z         att       fake x     fake z
+    x -> Encoder 1 -> MemoryUnit -> Decoder -> Encoder 2
+                  |                        |            |
+                real z                   fake x       fake z
     '''
 
     def __init__(self, in_channels: int, feature: int, mem_dim: int, z_dim: int):
         super().__init__()
-        self.Encoder = Encoder(in_channels, feature)
+        self.Encoder1 = Encoder(in_channels, feature)
         self.Memory = MemoryUnit(mem_dim, z_dim)
         self.Decoder = Decoder(in_channels, feature)
+        self.Encoder2 = Encoder(in_channels, feature)
 
     def forward(self, x):
-        real_z = self.Encoder(x)
-        mem_z, att = self.Memory(real_z)
+        real_z = self.Encoder1(x)
+        mem_z = self.Memory(real_z)
         fake_x = self.Decoder(mem_z)
-        fake_z = self.Encoder(fake_x)
+        fake_z = self.Encoder2(fake_x)
 
-        return real_z, fake_x, fake_z, att
+        return real_z, fake_x, fake_z
 
 
 class Autoencoder(nn.Module):

@@ -1,1 +1,1 @@
-from .Detect_cell import Detect_cell
+from .detect_cell import Detect_cell
