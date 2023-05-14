@@ -28,35 +28,39 @@ def Detect_cell(train: np.array,
     Parameters
     ----------
     train: array
-        The train expression matrix of shape n_obs x n_var.
+        Train expression matrix of shape n_obs x n_var.
         Rows correspond to cells and columns to genes.
         The cells in train will be regarded as known cell type.
     test: array
-        The test expression matrix of shape n_obs x n_var.
+        Test expression matrix of shape n_obs x n_var.
         Rows correspond to cells and columns to genes.
         It includes some novel cells which are different from train.
     n_epochs: int
-        The number of epochs to train NovelGan.
+        Number of epochs to train NovelGan.
     batch_size: int
-        The batch size of train datasets.
+        Batch size of train datasets.
     learning_rate: float
-        The learning rate of the generator and discriminator's optimizer.
+        Learning rate of the generator and discriminator's optimizer.
     mem_dim: int
-        The size of memory bank.
+        Size of memory bank.
     GPU: bool
         If 'True', the NovelGan will be trained on GPU (if possible).
     verbose: bool
         If 'True', prints the details in train.
     log_interval: int
-        The interval epochs between two prints of training information.
+        Interval epochs between two prints of training information.
     random_state: int
         Change to use different initial states for the optimization.
     weight: dictionary
-        The weight of every parts in generator's loss.
+        Weight of every parts in generator's loss.
         e.g. weight = {'w_enc': 1, 'w_rec': 30, 'w_adv': 1}
 
     Returns
     -------
+    diff: array
+        Anomaly score on test data, with shape of [n_obs, 1].
+        It's based on cosine similarity of real/fake embedding vectors.
+        The higher this value, the more likely the cell is a novel cell.
 
     '''
 
@@ -171,4 +175,4 @@ def Detect_cell(train: np.array,
             d = 1 - F.cosine_similarity(real_z, fake_z).reshape(-1, 1)
             diff = torch.cat([diff, d], dim=0)
 
-    return diff
+    return diff.cpu().numpy()
