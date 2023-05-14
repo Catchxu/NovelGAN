@@ -1,3 +1,4 @@
+import pandas as pd
 import anndata as ad
 from loguru import logger
 
@@ -31,7 +32,9 @@ def detect_cell_type(
 
 
 def detect_NovelGan(train: ad.AnnData, test: ad.AnnData, random_state: int):
-    result = Detect_cell(train.X, test.X, verbose=False)
-
+    diff = Detect_cell(train.X, test.X, verbose=False)
+    result = pd.DataFrame({'cell_type': test.obs['cell.type'], 
+                           'label': test.obs['label'],
+                           'diff': diff})
     return result
 
