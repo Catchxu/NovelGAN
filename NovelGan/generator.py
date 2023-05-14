@@ -64,10 +64,38 @@ class Decoder(nn.Module):
 
 class Generator(nn.Module):
     '''
+    This function is the generator in NovelGan, which includes two encoders, one
+    decoder and one memory unit. All of them don't share the weight.
+
+    Parameters
+    ----------
+    in_channels: int
+        Number of input's channels.
+    feature: int
+        Dimension of latent feature space.
+    mem_dim: int
+        Number of the vectors in memory bank.
+    z_dim: int
+        Size of embedding vectors.
+
+    Attributes
+    ----------
+    Encoder1: torch.nn.Module
+        Encoder for getting the embedding vector (real_z) of real data (x).
+    MemoryUnit: torch.nn.Module
+        Memory bank class to reconstruct the real_z.
+    Decoder: torch.nn.Module
+        Decoder for getting the reconstruction data (fake_x) from mem_z
+    Encoder2: torch.nn.Module
+        Encoder for getting the embedding vector (fake_z) of fake_x
+
+    Notes
+    -----
     Forward process:
     x -> Encoder 1 -> MemoryUnit -> Decoder -> Encoder 2
-                  |                        |            |
-                real z                   fake x       fake z
+                  |             |          |            |
+                real_z        mem_z      fake_x       fake_z
+
     '''
 
     def __init__(self, in_channels: int, feature: int, mem_dim: int, z_dim: int):
@@ -78,6 +106,25 @@ class Generator(nn.Module):
         self.Encoder2 = Encoder(in_channels, feature)
 
     def forward(self, x):
+        '''
+        Forward process of generator.
+
+        Parameters
+        ----------
+        x: torch.Tensor
+            The input data with shape of [batch_size, 1, n_var]
+
+        Returns
+        -------
+        real_z: torch.Tensor
+            The embedding vectors from x with shape of [batch_size, 1, z_dim]
+        fake_x: torch.Tensor
+            The reconstructed x from mem_z with shape of [batch_size, 1, n_var]
+        fake_z: torch.Tensor
+            The embedding vectors from fake_x with shape of [batch_size, 1, z_dim]
+
+        '''
+
         real_z = self.Encoder1(x)
         mem_z = self.Memory(real_z)
         fake_x = self.Decoder(mem_z)

@@ -5,22 +5,46 @@ from torch.nn import functional as F
 
 
 class MemoryUnit(nn.Module):
-    def __init__(self, mem_dim, z_dim, shrink_thres=0.0025, bias=None):
+    '''
+    This class includes memory bank construction based on Soft Attention.
+
+    Parameters
+    ----------
+    mem_dim: int
+        Number of the vectors in memory bank.
+    z_dim: int
+        Size of embedding vectors.
+    shrink_thres: float
+        Threshold in hard_shrink_relu.
+
+    Attributes
+    ----------
+    mem_dim: int
+        Number of the vectors in memory bank.
+    z_dim: int
+        Size of embedding vectors.
+    shrink_thres: float
+        Threshold in hard_shrink_relu.
+    mem: torch.Tensor
+        Memory bank for reconstruction, with shape of [mem_dim, z_dim].
+    mem_ptr: torch.Tensor
+        Pointer of the memory bank's head.
+
+    '''
+
+    def __init__(self, mem_dim, z_dim, shrink_thres=0.0035):
         super().__init__()
         self.mem_dim = mem_dim
         self.z_dim = z_dim
+        self.shrink_thres = shrink_thres
         self.register_buffer("mem", torch.randn(self.mem_dim, self.z_dim))
         self.register_buffer("mem_ptr", torch.zeros(1, dtype=torch.long))
-        self.shrink_thres = shrink_thres
-        self.bias = bias
 
         self.reset_parameters()
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.mem.size(1))
         self.mem.data.uniform_(-stdv, stdv)
-        if self.bias is not None:
-            self.bias.data.uniform_(-stdv, stdv)
 
     @torch.no_grad()
     def update_mem(self, z):
@@ -34,11 +58,13 @@ class MemoryUnit(nn.Module):
         ptr = (ptr + batch_size) % self.mem_dim  # move pointer
 
         self.mem_ptr[0] = ptr
+    
+    def attention(self, input):
+        '''
+        Calculate the attention weight by dot product attention.
+        '''
 
-    def forward(self, input):
-        input = input.reshape(input.shape[0], input.shape[2])  # input, B x 1 x C -> B x C
-
-        att_weight = F.linear(input, self.mem)  # input x mem^T, (BxC) x (CxM) = B x M
+        att_weight = torch.mm(input, self.mem.T)  # input x mem^T, (BxC) x (CxM) = B x M
         att_weight = F.softmax(att_weight, dim=1)  # B x M
 
         # ReLU based shrinkage, hard shrinkage for positive value
@@ -46,13 +72,16 @@ class MemoryUnit(nn.Module):
             att_weight = hard_shrink_relu(att_weight, lambd=self.shrink_thres)
             att_weight = F.normalize(att_weight, p=1, dim=1)
 
-        mem_trans = self.mem.permute(1, 0)  # mem^T, C x M
-        output = F.linear(att_weight, mem_trans)  # AttWeight x mem, (BxM) x (MxC) = B x C
-
-        output = output.reshape(output.shape[0], 1, -1)  # output,f B x C -> B x 1 x C
+        output = torch.mm(att_weight, self.mem)  # AttWeight x mem, (BxM) x (MxC) = B x C
 
         return output
 
+    def forward(self, input):
+        input = input.reshape(input.shape[0], input.shape[2])  # input, B x 1 x C -> B x C
+        output = self.attention(input)
+        output = output.reshape(output.shape[0], 1, -1)  # output,f B x C -> B x 1 x C
+
+        return output
 
 # relu based hard shrinkage function, only works for positive values
 def hard_shrink_relu(input, lambd=0, epsilon=1e-12):
