@@ -11,7 +11,7 @@ data_cfg = {
 method_cfg = {'NovelGan': 1}
 metrics = ['ARI', 'NMI']
 
-a, b = cell_detect_bench(
+cell_detect_bench(
     data_cfg, method_cfg, metrics, log_path='loguru.log', random_state=100
 )
 # rm_cache("./cache")
