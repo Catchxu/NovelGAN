@@ -23,5 +23,8 @@ def split(adata: ad.AnnData,
     test = adata[test_id, :]
 
     train = train[~train.obs['cell.type'].str.contains(remove_cell), :]
+    # add ground truth. 1 means novel cell type and 0 means known cell type.
+    test.obs['label'] = 0
+    test[test.obs['cell.type'].str.contains(remove_cell), :].obs['label'] = 1
 
     return train, test
