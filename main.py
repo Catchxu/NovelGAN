@@ -1,17 +1,17 @@
 from benchmark.run_benchmark import cell_detect_bench
+from NovelGan import Detect_cell
 
 data_cfg = {
-    'pbmcA+HL': {
-        'data1_path': './scdata/pbmcA/',
-        'data2_path': './scdata/HL/',
+    'PBMC(SLE)': {
+        'data_path': './scdata/',
+        'info_path': './scdata/info.tsv'
     }
 }
 
 method_cfg = {'NovelGan': 1}
-scales = ['small']
 metrics = ['ARI', 'NMI']
 
-cell_detect_bench(
-    data_cfg, method_cfg, scales, metrics, log_path='loguru.log', random_state=100
+a, b = cell_detect_bench(
+    data_cfg, method_cfg, metrics, log_path='loguru.log', random_state=100
 )
 # rm_cache("./cache")
