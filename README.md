@@ -1,5 +1,5 @@
-# Novel cell type detection and integration of multiple single-cell datasets with NovelGan
-We propose a Generative Adversarial Networks called NovelGan, which can detect novel cell type (or malignant cells) from 
+# Novel cell type detection and integration of multiple single-cell datasets with NovelGAN
+We propose a Generative Adversarial Networks called NovelGAN, which can detect novel cell type (or malignant cells) from 
 known cells, and remove the batch effects among multiple batches on single-cell datasets.
 
 ## Dependencies
