@@ -1,5 +1,5 @@
 from benchmark.run_benchmark import cell_detect_bench
-from NovelGan import Detect_cell
+from NovelGAN import Detect_cell
 
 data_cfg = {
     'PBMC(SLE)': {
@@ -8,7 +8,7 @@ data_cfg = {
     }
 }
 
-method_cfg = {'NovelGan': 1}
+method_cfg = {'NovelGAN': 1}
 metrics = ['ARI', 'NMI']
 
 cell_detect_bench(

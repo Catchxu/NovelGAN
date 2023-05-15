@@ -23,7 +23,7 @@ def Detect_cell(train: np.array,
                 random_state: int = 100,
                 weight: Dict = None):
     '''
-    This function is for novel cell type detection via NovelGan.
+    This function is for novel cell type detection via NovelGAN.
 
     Parameters
     ----------
@@ -36,7 +36,7 @@ def Detect_cell(train: np.array,
         Rows correspond to cells and columns to genes.
         It includes some novel cells which are different from train.
     n_epochs: int
-        Number of epochs to train NovelGan.
+        Number of epochs to train NovelGAN.
     batch_size: int
         Batch size of train datasets.
     learning_rate: float
@@ -44,7 +44,7 @@ def Detect_cell(train: np.array,
     mem_dim: int
         Size of memory bank.
     GPU: bool
-        If 'True', the NovelGan will be trained on GPU (if possible).
+        If 'True', the NovelGAN will be trained on GPU (if possible).
     verbose: bool
         If 'True', prints the details in train.
     log_interval: int
@@ -68,7 +68,7 @@ def Detect_cell(train: np.array,
         if torch.cuda.is_available():
             device = torch.device("cuda:0")
         else:
-            print("GPU isn't available, and use CPU to train NovelGan.")
+            print("GPU isn't available, and use CPU to train NovelGAN.")
             device = torch.device("cpu")
     else:
         device = torch.device("cpu")
@@ -121,7 +121,7 @@ def Detect_cell(train: np.array,
 
     D.train()
     G.train()
-    # train the NovelGan
+    # train the NovelGAN
     for epoch in range(n_epochs):
         for idx, data in enumerate(train_loader):
             data = data.to(device)
@@ -163,7 +163,7 @@ def Detect_cell(train: np.array,
             print('Train Epoch: [{}/{} ({:.0f}%)]\tG_loss: {:.6f}\tD_loss: {:.6f}'.format(
                    epoch+1, n_epochs, 100.*(epoch+1)/n_epochs, G_loss.item(), D_loss.item()))
 
-    # test the NovelGan and detect novel cell type
+    # test the NovelGAN and detect novel cell type
     G.eval()
     with torch.no_grad():
         diff = torch.empty((0, 1)).to(device)

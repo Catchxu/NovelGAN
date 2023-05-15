@@ -64,7 +64,7 @@ class Decoder(nn.Module):
 
 class Generator(nn.Module):
     '''
-    This function is the generator in NovelGan, which includes two encoders, one
+    This function is the generator in NovelGAN, which includes two encoders, one
     decoder and one memory unit. All of them don't share the weight.
 
     Parameters

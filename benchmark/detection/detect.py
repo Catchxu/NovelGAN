@@ -3,7 +3,7 @@ import anndata as ad
 from loguru import logger
 
 from ._io import read_results_from_cache, write_results_as_cache
-from NovelGan import Detect_cell
+from NovelGAN import Detect_cell
 
 
 def generally_detect(
@@ -23,15 +23,15 @@ def detect_cell_type(
 ):
     logger.opt(colors=True).info(f"Running <magenta>{method}</magenta> to detect novel cell type"
                                  f"and random state <yellow>{random_state}</yellow>...")
-    if method == 'NovelGan':
-        return detect_NovelGan(train, test, random_state)
+    if method == 'NovelGAN':
+        return detect_NovelGAN(train, test, random_state)
     elif method == 'CAMLU':
         return None
     else:
         raise NotImplementedError(f"{method} has not been implemented.")
 
 
-def detect_NovelGan(train: ad.AnnData, test: ad.AnnData, random_state: int):
+def detect_NovelGAN(train: ad.AnnData, test: ad.AnnData, random_state: int):
     diff = Detect_cell(train.X, test.X, verbose=False)
     result = pd.DataFrame({'cell_type': test.obs['cell.type'], 
                            'label': test.obs['label'],
