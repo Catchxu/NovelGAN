@@ -18,32 +18,29 @@ def create_records(
         for method, n_runs in method_cfg.items()
         for tup in product(data_cfg.keys(), (method.__name__ if callable(method) else method,), range(n_runs))
     ]
-    row_index = pd.MultiIndex.from_tuples(row_tuples, names=['dataset', 'method', 'run'])
+    row_index = pd.MultiIndex.from_tuples(row_tuples, names=['Dataset', 'Method', 'Run'])
 
-    single_record = pd.DataFrame(
-        np.full((len(row_tuples), 1), fill_value=np.nan, dtype=float),
-        index=row_index, columns=['value']
+    records = pd.DataFrame(
+        np.full((len(row_tuples), len(metrics)), fill_value=np.nan, dtype=float),
+        index=row_index, columns=metrics
     )
-    return {metric: single_record.copy() for metric in metrics}
+    return records
 
 
 def store_metrics_to_records(
-        records: Dict[str, pd.DataFrame],
+        records: pd.DataFrame,
         metric: Literal['ARI', 'NMI'],
         value: float,
         data_name: str,
         method: Union[str, Callable],
         run: int
 ):
-    if callable(method):
-        method = method.__name__
-    records[metric].loc[(data_name, method, run), 1] = value
+    records.loc[(data_name, method, run), metric] = value
 
 
-def write_records(records: Dict[str, pd.DataFrame]):
+def write_records(records: pd.DataFrame):
     record_name = f"{datetime.now().strftime('%Y-%m %H_%M_%S')}"
     writer = pd.ExcelWriter(f'{record_name}.xlsx')
-    for metric, record in records.items():
-        record.to_excel(writer, sheet_name=metric, index=True)
+    records.to_excel(writer, index=True)
     writer.close()
     logger.info(f"records have been saved into './{record_name}.xlsx'.")

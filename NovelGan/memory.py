@@ -58,7 +58,7 @@ class MemoryUnit(nn.Module):
         ptr = (ptr + batch_size) % self.mem_dim  # move pointer
 
         self.mem_ptr[0] = ptr
-    
+
     def attention(self, input):
         '''
         Calculate the attention weight by dot product attention.

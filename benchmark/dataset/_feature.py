@@ -1,10 +1,7 @@
-import os
-import numpy as np
-import scanpy as sc
 import pandas as pd
 import anndata as ad
 import anndata2ri
-from typing import Optional, Union
+from typing import Optional
 from rpy2.robjects import r, globalenv
 from rpy2.robjects.packages import importr
 

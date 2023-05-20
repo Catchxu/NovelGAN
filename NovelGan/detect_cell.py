@@ -175,4 +175,5 @@ def Detect_cell(train: np.array,
             d = 1 - F.cosine_similarity(real_z, fake_z).reshape(-1, 1)
             diff = torch.cat([diff, d], dim=0)
 
-    return diff.cpu().numpy()
+    diff = diff.cpu().numpy()
+    return diff.reshape(-1)

@@ -1,5 +1,4 @@
 from benchmark.run_benchmark import cell_detect_bench
-from NovelGAN import Detect_cell
 
 data_cfg = {
     'PBMC(SLE)': {

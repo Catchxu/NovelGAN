@@ -31,7 +31,6 @@ def cell_detect_bench(
         adata = load_data(data_name, data_props, preprocess)
         remove_cell = 'Monocytes'
         train, test = split(adata, remove_cell, random_state)
-        return train, test
         for method, n_runs in method_cfg.items():
             for run in range(n_runs):
                 result = generally_detect(train, test, data_name, method, run, random_state)

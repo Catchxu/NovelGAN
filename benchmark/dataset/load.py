@@ -61,7 +61,7 @@ def reader(data_name: str,
         adatas = [adata1, adata2, adata3]
         adata = ad.concat(adatas, merge='same')
         info = pd.read_csv(data_props['info_path'], sep='\t')
-        adata.obs = info.loc[adata.obs.index, ['tsne1', 'tsne2', 'cell.type']]
+        adata.obs = info.loc[adata.obs.index, ['cell.type']]
         adata = adata[~adata.obs['cell.type'].isna(), :]
 
     # store data name
@@ -86,14 +86,18 @@ def process(adata: ad.AnnData):
     adata = adata[adata.obs.n_genes_by_counts < 2500, :]
 
     # store to adata.raw
-    adata.raw = adata
+    adata.raw = clear_info(adata)
     sc.pp.normalize_per_cell(adata)
     sc.pp.log1p(adata, base=e)
 
+    adata = clear_info(adata)
+    return adata
+
+
+def clear_info(adata: ad.AnnData):
     # clear unnecessary information
-    info = adata.obs.loc[:, ['tsne1', 'tsne2', 'cell.type']]
+    info = adata.obs.loc[:, ['cell.type']]
     adata.obs = info
     info = adata.var.loc[:, ['gene_ids']]
     adata.var = info
-
     return adata

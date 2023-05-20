@@ -1,5 +1,6 @@
 import traceback
 import anndata2ri
+from rpy2.robjects import pandas2ri
 import anndata as ad
 import numpy as np
 import scanpy as sc
@@ -38,7 +39,9 @@ def rpy2_wrapper(func):
         try:
             with HiddenPrints():
                 anndata2ri.activate()
+                pandas2ri.activate()
                 res = func(*args, **kwargs)
+                pandas2ri.deactivate()
                 anndata2ri.deactivate()
                 return res
         except:
