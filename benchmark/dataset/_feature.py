@@ -9,7 +9,7 @@ from ._utils import rpy2_wrapper
 
 
 @rpy2_wrapper
-def M3Drop(adata: ad.AnnData) -> Optional[pd.DataFrame]:
+def feature_select(adata: ad.AnnData, n_feature: int = 3000) -> Optional[pd.DataFrame]:
     genes = adata.var.index
     adata = adata.raw.to_adata()
     adata = adata[:, genes]
@@ -20,11 +20,6 @@ def M3Drop(adata: ad.AnnData) -> Optional[pd.DataFrame]:
     DE_genes <- M3DropFeatureSelection(norm, mt_method="fdr", mt_threshold=1, suppress.plot = TRUE)
     """)
     result = r("rownames(DE_genes)")
-    return list(result)
-
-
-def feature_select(adata: ad.AnnData, n_feature: int):
-    genes = M3Drop(adata)
-    selected_genes = genes[0:n_feature]
-    adata = adata[:, selected_genes]
-    return adata
+    result = list(result)
+    genes = result[0:n_feature]
+    return genes

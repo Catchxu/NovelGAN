@@ -6,7 +6,6 @@ from loguru import logger
 # from ._metrics import compute_clustering_metrics
 from ._recorder import create_records, write_records, store_metrics_to_records
 from ._utils import rm_cache, set_logger
-from ._split import split
 from .dataset import load_data
 from .detection import generally_detect
 
@@ -28,12 +27,11 @@ def cell_detect_bench(
     records = create_records(data_cfg, method_cfg, metrics)
 
     for data_name, data_props in data_cfg.items():
-        adata = load_data(data_name, data_props, preprocess)
-        remove_cell = 'Monocytes'
-        train, test = split(adata, remove_cell, random_state)
+        train, test1, test2 = load_data(data_name, data_props, preprocess)
+        return train, test1, test2
         for method, n_runs in method_cfg.items():
             for run in range(n_runs):
-                result = generally_detect(train, test, data_name, method, run, random_state)
+                result = generally_detect(train, test1, data_name, method, run, random_state)
                 # to be updated
                 for metric in metrics:
                     value = 1

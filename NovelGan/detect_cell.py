@@ -1,68 +1,30 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-import numpy as np
-import random
+import anndata as ad
 from typing import Dict
 
-from .generator import Generator
+from ._pretrain import Pretrain
+from .generator import Memory_G
 from .discriminator import Discriminator
+from ._utils import seed_everything
 
 
-def Detect_cell(train: np.array,
-                test: np.array,
+def Detect_cell(train: ad.AnnData,
+                test: ad.AnnData,
                 n_epochs: int = 50,
-                batch_size: int = 32,
-                learning_rate: float = 0.001,
+                batch_size: int = 128,
+                learning_rate: float = 1e-4,
                 mem_dim: int = 2048,
                 GPU: bool = True,
                 verbose: bool = True,
                 log_interval: int = 10,
-                random_state: int = 100,
-                weight: Dict = None):
-    '''
-    This function is for novel cell type detection via NovelGAN.
-
-    Parameters
-    ----------
-    train: array
-        Train expression matrix of shape n_obs x n_var.
-        Rows correspond to cells and columns to genes.
-        The cells in train will be regarded as known cell type.
-    test: array
-        Test expression matrix of shape n_obs x n_var.
-        Rows correspond to cells and columns to genes.
-        It includes some novel cells which are different from train.
-    n_epochs: int
-        Number of epochs to train NovelGAN.
-    batch_size: int
-        Batch size of train datasets.
-    learning_rate: float
-        Learning rate of the generator and discriminator's optimizer.
-    mem_dim: int
-        Size of memory bank.
-    GPU: bool
-        If 'True', the NovelGAN will be trained on GPU (if possible).
-    verbose: bool
-        If 'True', prints the details in train.
-    log_interval: int
-        Interval epochs between two prints of training information.
-    random_state: int
-        Change to use different initial states for the optimization.
-    weight: dictionary
-        Weight of every parts in generator's loss.
-        e.g. weight = {'w_enc': 1, 'w_rec': 30, 'w_adv': 1}
-
-    Returns
-    -------
-    diff: array
-        Anomaly score on test data, with shape of [n_obs, 1].
-        It's based on cosine similarity of real/fake embedding vectors.
-        The higher this value, the more likely the cell is a novel cell.
-
-    '''
+                random_state: int = None,
+                weight: Dict = None,
+                pre_train: bool = True):
 
     if GPU:
         if torch.cuda.is_available():
@@ -74,17 +36,17 @@ def Detect_cell(train: np.array,
         device = torch.device("cpu")
 
     if random_state is not None:
-        torch.manual_seed(random_state)
-        torch.cuda.manual_seed_all(random_state)
-        np.random.seed(random_state)
-        random.seed(random_state)
-        torch.backends.cudnn.deterministic = True
+        seed_everything(random_state)
+
+    if (train.var_names != test.var_names).any():
+        raise RuntimeError('Train data and test data have different genes.')
+    n_gene = train.n_vars
+    train = train.X
+    test = test.X
 
     # Initialize dataloader for train data
     train = torch.as_tensor(torch.from_numpy(train), dtype=torch.float32)
-    train = train.reshape(train.shape[0], 1, -1)
     test = torch.as_tensor(torch.from_numpy(test), dtype=torch.float32)
-    test = test.reshape(test.shape[0], 1, -1)
     train_loader = DataLoader(train,
                               batch_size=batch_size,
                               shuffle=True,
@@ -98,17 +60,27 @@ def Detect_cell(train: np.array,
                              pin_memory=True)
 
     # Initialize Discriminator and Generator
-    z_dim = int((train.shape[2]/8)) - 1
-    D = Discriminator().to(device)
-    G = Generator(1, 64, mem_dim, z_dim).to(device)
+    D = Discriminator(n_gene).to(device)
+    G = Memory_G(n_gene).to(device)
+    if pre_train:
+        path_1 = './pretrain/Encoder.pth'
+        path_2 = './pretrain/Decoder.pth'
+        if not (os.path.exists(path_1) and os.path.exists(path_2)):
+            Pretrain(train)
+
+        # load the pre-trained weights for Encoder and Decoder
+        pre_weights = torch.load(path_1)
+        G.Encoder1.load_state_dict({k: v for k, v in pre_weights.items()})
+        G.Encoder2.load_state_dict({k: v for k, v in pre_weights.items()})
+        pre_weights = torch.load(path_2)
+        G.Decoder.load_state_dict({k: v for k, v in pre_weights.items()})
 
     opt_D = optim.Adam(D.parameters(),
                        lr=learning_rate,
                        betas=(0.5, 0.999))
     opt_G = optim.Adam(G.parameters(),
-                       lr=learning_rate,
+                       lr=learning_rate*2,
                        betas=(0.5, 0.999))
-
     D_scaler = torch.cuda.amp.GradScaler()
     G_scaler = torch.cuda.amp.GradScaler()
     L1 = nn.L1Loss().to(device)
@@ -117,7 +89,7 @@ def Detect_cell(train: np.array,
 
     # Initialize the weight of generator's loss
     if weight is None:
-        weight = {'w_enc': 1, 'w_rec': 30, 'w_adv': 1}
+        weight = {'w_enc': 1, 'w_rec': 50, 'w_adv': 1}
 
     D.train()
     G.train()
@@ -126,17 +98,14 @@ def Detect_cell(train: np.array,
         for idx, data in enumerate(train_loader):
             data = data.to(device)
 
-            # forward
-            real_z, fake_data, fake_z = G(data)
-            real_d = D(data)
-            fake_d = D(fake_data.detach())
-
             # update G-Net
+            real_z, fake_data, fake_z = G(data)
+            real_d = torch.sigmoid(D(data))
+            fake_d = torch.sigmoid(D(fake_data))
+
             Loss_enc = L2(real_z, fake_z)
             Loss_rec = L1(data, fake_data)
-            real_loss = L2(real_d, torch.ones_like(real_d))
-            fake_loss = L2(fake_d, torch.zeros_like(fake_d))
-            Loss_adv = real_loss + fake_loss
+            Loss_adv = L2(real_d, torch.zeros_like(real_d)) + L2(fake_d, torch.ones_like(fake_d))
             G_loss = (weight['w_enc']*Loss_enc +
                       weight['w_rec']*Loss_rec +
                       weight['w_adv']*Loss_adv)
@@ -147,17 +116,16 @@ def Detect_cell(train: np.array,
             G_scaler.update()
 
             # update D-Net
-            real_loss = BCE(real_d, torch.ones_like(real_d))
-            fake_loss = BCE(fake_d, torch.zeros_like(fake_d))
-            D_loss = real_loss + fake_loss
+            real_z, fake_data, fake_z = G(data)
+            real_d = torch.sigmoid(D(data))
+            fake_d = torch.sigmoid(D(fake_data.detach()))
+
+            D_loss = BCE(real_d, torch.ones_like(real_d)) + BCE(fake_d, torch.zeros_like(fake_d))
 
             opt_D.zero_grad()
             D_scaler.scale(D_loss).backward()
             D_scaler.step(opt_D)
             D_scaler.update()
-
-            # update the memory bank
-            G.Memory.update_mem(real_z)
 
         if verbose and ((epoch+1) % log_interval == 0):
             print('Train Epoch: [{}/{} ({:.0f}%)]\tG_loss: {:.6f}\tD_loss: {:.6f}'.format(
@@ -170,10 +138,9 @@ def Detect_cell(train: np.array,
         for idx, data in enumerate(test_loader):
             data = data.to(device)
             real_z, fake_test, fake_z = G(data)
-            real_z = real_z.reshape(real_z.shape[0], -1)
-            fake_z = fake_z.reshape(fake_z.shape[0], -1)
             d = 1 - F.cosine_similarity(real_z, fake_z).reshape(-1, 1)
             diff = torch.cat([diff, d], dim=0)
 
     diff = diff.cpu().numpy()
+    diff = (diff - diff.min())/(diff.max() - diff.min())
     return diff.reshape(-1)

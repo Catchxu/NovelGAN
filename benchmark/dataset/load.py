@@ -3,14 +3,13 @@ from math import e
 from typing import Dict
 from typing import Union
 
-import pandas as pd
 import anndata as ad
 import scanpy as sc
 from loguru import logger
 
 from ._feature import feature_select
 from ._io import write_adata_as_cache, read_adata_from_cache
-from ._preprocess import make_unique, clean_var_names
+from ._utils import make_unique, clean_var_names, clear_info
 from .._utils import console
 
 
@@ -20,16 +19,36 @@ def load_data(data_name: str,
     console.rule('[bold red]' + data_name)
     logger.info("Reading adata...")
 
-    adata = read_adata_from_cache(data_name)
+    if data_name == 'PBMC':
+        train = reader(data_props, 'train')
+        test1 = reader(data_props, 'test1')
+        test2 = reader(data_props, 'test2')
+
+        adatas = [train, test1, test2]
+        adatas = ad.concat(adatas, merge='same')
+        genes = feature_select(adatas, n_feature=3000)
+        train = train[:, genes]
+        test1 = test1[:, genes]
+        test2 = test2[:, genes]
+
+        train, test1, test2 = remove(train, test1, test2)
+
+        return train, test1, test2
+
+
+def reader(data_props: Dict[str, Union[os.PathLike, str]],
+           batch_type: str,
+           preprocess: bool = True):
+    adata = read_adata_from_cache(batch_type)
     if isinstance(adata, ad.AnnData):
-        console.print(f"Using cached adata and skip preprocessing. \n"
+        console.print(f"Using cached adata [bold red]{batch_type}[/bold red] and skip preprocessing. \n"
                       f"Shape: [yellow]{adata.n_obs}[/yellow] cells, [yellow]{adata.n_vars}[/yellow] genes.")
     else:
         logger.opt(colors=True).info(
-            f"No cache for <magenta>{data_name}</magenta>. Trying to read data from the given path in config..."
+            f"No cache for <magenta>{batch_type}</magenta>. Trying to read data from the given path in config..."
         )
-
-        adata = reader(data_name, data_props, preprocess)
+        console.print(f"Reading adata [bold red]{batch_type}[/bold red]")
+        adata = sc.read(data_props[batch_type], var_names='gene_symbols')
 
         if preprocess:
             console.print(f"Before QC: [yellow]{adata.n_obs}[/yellow] cells and [yellow]{adata.n_vars}[/yellow] genes.")
@@ -38,36 +57,8 @@ def load_data(data_name: str,
         else:
             console.print(f"Skip preprocessing [yellow]{adata.n_obs}[/yellow] cells and [yellow]{adata.n_vars}[/yellow] genes.")
 
-        adata = feature_select(adata, n_feature=3000)
-
-        # save the cache
-        write_adata_as_cache(adata, data_name)
-
-    return adata
-
-
-def reader(data_name: str,
-           data_props: Dict[str, Union[os.PathLike, str]],
-           preprocess: bool = True):
-    if data_name == 'PBMC(SLE)':
-        data1_path = os.path.join(data_props['data_path'], 'pbmcA')
-        data2_path = os.path.join(data_props['data_path'], 'pbmcB')
-        data3_path = os.path.join(data_props['data_path'], 'pbmcC')
-
-        # read the single-cell data and preprocess
-        adata1 = sc.read_10x_mtx(data1_path, var_names='gene_symbols')
-        adata2 = sc.read_10x_mtx(data2_path, var_names='gene_symbols')
-        adata3 = sc.read_10x_mtx(data3_path, var_names='gene_symbols')
-        adatas = [adata1, adata2, adata3]
-        adata = ad.concat(adatas, merge='same')
-        info = pd.read_csv(data_props['info_path'], sep='\t')
-        adata.obs = info.loc[adata.obs.index, ['cell.type']]
-        adata = adata[~adata.obs['cell.type'].isna(), :]
-
-    # store data name
-    adata.uns['data_name'] = data_name
-
-    adata.X = adata.X.todense()
+        adata.X = adata.X.toarray()
+        write_adata_as_cache(adata, batch_type)
 
     return adata
 
@@ -94,10 +85,22 @@ def process(adata: ad.AnnData):
     return adata
 
 
-def clear_info(adata: ad.AnnData):
-    # clear unnecessary information
-    info = adata.obs.loc[:, ['cell.type']]
-    adata.obs = info
-    info = adata.var.loc[:, ['gene_ids']]
-    adata.var = info
-    return adata
+def remove(train: ad.AnnData, test1: ad.AnnData, test2: ad.AnnData):
+    type1 = 'Monocytes'
+    type2 = 'B cells'
+
+    train = train[~train.obs['cell.type'].str.contains(type1), :]
+    train = train[~train.obs['cell.type'].str.contains(type2), :]
+    train.obs['label'] = 0
+
+    # B cells is novel cell type and Monocytes have been removed
+    test1 = test1[~test1.obs['cell.type'].str.contains(type1), :]
+    test1.obs['label'] = 0
+    test1.obs.loc[test1.obs['cell.type'].str.contains(type2), 'label'] = 1
+
+    # Monocytes is novel cell type and B cells have been removed
+    test2 = test2[~test2.obs['cell.type'].str.contains(type2), :]
+    test2.obs['label'] = 0
+    test2.obs.loc[test2.obs['cell.type'].str.contains(type1), 'label'] = 1
+
+    return train, test1, test2

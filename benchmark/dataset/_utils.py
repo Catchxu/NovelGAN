@@ -7,6 +7,7 @@ import scanpy as sc
 from loguru import logger
 from scipy.sparse import issparse
 from .._utils import HiddenPrints
+import re
 
 
 def subsample(adata: ad.AnnData, n_sampled_obs: int = None, n_sampled_vars: int = None, random_state: int = 0):
@@ -34,6 +35,25 @@ def is_normalized(adata: ad.AnnData):
     return not np.allclose(adata.X % 1, 0)
 
 
+def clean_var_names(adata: ad.AnnData):
+    adata.var['original_name'] = adata.var_names
+    logger.debug("The original variable names have been saved to `adata.var['original_name']`.")
+    gene_names = adata.var_names.to_numpy()
+    regex = re.compile(pattern='[-_:+()|]')
+    vreplace = np.vectorize(lambda x: regex.sub('.', x), otypes=[str])
+    adata.var_names = vreplace(gene_names)
+
+
+def make_unique(adata: ad.AnnData):
+    if adata.obs_names.has_duplicates:
+        logger.debug("Observation names have duplicates. Making them unique...")
+        adata.obs_names_make_unique(join='.')
+    if adata.var_names.has_duplicates:
+        logger.debug("Variables names have duplicates. Making them unique...")
+        adata.var_names_make_unique(join='.')
+    logger.info("Observation names and Variables names are all unique now.")
+
+
 def rpy2_wrapper(func):
     def wrapper(*args, **kwargs):
         try:
@@ -47,3 +67,12 @@ def rpy2_wrapper(func):
         except:
             traceback.print_exc()
     return wrapper
+
+
+def clear_info(adata: ad.AnnData):
+    # clear unnecessary information
+    info = adata.obs.loc[:, ['cell.type']]
+    adata.obs = info
+    info = adata.var.loc[:, ['gene_ids']]
+    adata.var = info
+    return adata
