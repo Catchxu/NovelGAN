@@ -1,5 +1,5 @@
 # NovelGAN: Novel cell type detection and integration of multiple datasets via generate adversarial networks
-We propose a Generative Adversarial Networks called NovelGAN, which can detect novel cell type (or malignant cells) from 
+We propose a Generative Adversarial Networks called NovelGAN, which can detect novel cell type (or malignant cells) from
 known cells, and remove the batch effects among multiple batches on single-cell datasets.
 
 ## Dependencies
@@ -20,5 +20,6 @@ known cells, and remove the batch effects among multiple batches on single-cell 
 - System: Ubuntu 20.04.5 LTS
 - Python: 3.9.15
 
-## Citation
-Coming soon.
+## Notes
+This repository has been abandoned. Please go to https://github.com/Catchxu/ODBC-GAN. ODBC-GAN is based on NovelGAN, but
+it's more powerful. 
